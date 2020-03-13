@@ -29,6 +29,7 @@ import net.lingala.zip4j.model.LocalFileHeader;
 import net.lingala.zip4j.model.Zip64EndOfCentralDirectoryLocator;
 import net.lingala.zip4j.model.Zip64EndOfCentralDirectoryRecord;
 import net.lingala.zip4j.model.Zip64ExtendedInfo;
+import net.lingala.zip4j.model.ZipHeader;
 import net.lingala.zip4j.model.ZipModel;
 import net.lingala.zip4j.model.enums.AesKeyStrength;
 import net.lingala.zip4j.model.enums.AesVersion;
@@ -98,6 +99,37 @@ public class HeaderReader {
     zipModel.setCentralDirectory(readCentralDirectory(zip4jRaf, rawIO, charset));
 
     return zipModel;
+  }
+
+  public List<ZipHeader> parseExtraDataRecords(FileHeader fileHeader, RawIO rawIO) throws ZipException {
+    List<ExtraDataRecord> extraDataRecords = fileHeader.getExtraDataRecords();
+    int recordCount = extraDataRecords.size();
+    List<ZipHeader> parsedRecords = new ArrayList<>(recordCount);
+
+    for (int i = 0; i < recordCount; i++) {
+      ExtraDataRecord extraDataRecord = extraDataRecords.get(i);
+      ZipHeader parsedRecord = parseExtraDataRecord(extraDataRecord, fileHeader, rawIO);
+      parsedRecords.add(parsedRecord);
+    }
+
+    return parsedRecords;
+  }
+
+  private ZipHeader parseExtraDataRecord(ExtraDataRecord extraDataRecord, FileHeader fileHeader, RawIO rawIO) throws ZipException {
+    long header = extraDataRecord.getHeader();
+    if (header == HeaderSignature.AES_EXTRA_DATA_RECORD.getValue()) {
+      return readAesExtraDataRecord(extraDataRecord, rawIO);
+    } else if (header == HeaderSignature.ZIP64_EXTRA_FIELD_SIGNATURE.getValue()) {
+      long compressedSize = fileHeader.getCompressedSize();
+      long uncompressedSize = fileHeader.getUncompressedSize();
+      long offsetLocalHeader = fileHeader.getOffsetLocalHeader();
+      int diskNumberStart = fileHeader.getDiskNumberStart();
+      return readZip64ExtendedInfo(extraDataRecord, rawIO, uncompressedSize, compressedSize, offsetLocalHeader, diskNumberStart);
+//    } else if ( ... ) {
+//      TODO: more extra field support
+    } else {
+      return extraDataRecord;
+    }
   }
 
   private EndOfCentralDirectoryRecord readEndOfCentralDirectoryRecord(RandomAccessFile zip4jRaf, RawIO rawIO, Charset charset)
