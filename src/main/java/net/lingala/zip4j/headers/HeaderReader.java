@@ -491,38 +491,43 @@ public class HeaderReader {
       }
 
       if (HeaderSignature.ZIP64_EXTRA_FIELD_SIGNATURE.getValue() == extraDataRecord.getHeader()) {
-
-        Zip64ExtendedInfo zip64ExtendedInfo = new Zip64ExtendedInfo();
-        byte[] extraData = extraDataRecord.getData();
-
-        if (extraDataRecord.getSizeOfData() <= 0) {
-          return null;
-        }
-
-        int counter = 0;
-        if (counter < extraDataRecord.getSizeOfData() && uncompressedSize == ZIP_64_SIZE_LIMIT) {
-          zip64ExtendedInfo.setUncompressedSize(rawIO.readLongLittleEndian(extraData, counter));
-          counter += 8;
-        }
-
-        if (counter < extraDataRecord.getSizeOfData() && compressedSize == ZIP_64_SIZE_LIMIT) {
-          zip64ExtendedInfo.setCompressedSize(rawIO.readLongLittleEndian(extraData, counter));
-          counter += 8;
-        }
-
-        if (counter < extraDataRecord.getSizeOfData() && offsetLocalHeader == ZIP_64_SIZE_LIMIT) {
-          zip64ExtendedInfo.setOffsetLocalHeader(rawIO.readLongLittleEndian(extraData, counter));
-          counter += 8;
-        }
-
-        if (counter < extraDataRecord.getSizeOfData() && diskNumberStart == ZIP_64_NUMBER_OF_ENTRIES_LIMIT) {
-          zip64ExtendedInfo.setDiskNumberStart(rawIO.readIntLittleEndian(extraData, counter));
-        }
-
-        return zip64ExtendedInfo;
+        return readZip64ExtendedInfo(extraDataRecord, rawIO, uncompressedSize, compressedSize, offsetLocalHeader, diskNumberStart);
       }
     }
     return null;
+  }
+
+  private Zip64ExtendedInfo readZip64ExtendedInfo(ExtraDataRecord extraDataRecord, RawIO rawIO,
+      long uncompressedSize, long compressedSize, long offsetLocalHeader,
+      int diskNumberStart) {
+    Zip64ExtendedInfo zip64ExtendedInfo = new Zip64ExtendedInfo();
+    byte[] extraData = extraDataRecord.getData();
+
+    if (extraDataRecord.getSizeOfData() <= 0) {
+      return null;
+    }
+
+    int counter = 0;
+    if (counter < extraDataRecord.getSizeOfData() && uncompressedSize == ZIP_64_SIZE_LIMIT) {
+      zip64ExtendedInfo.setUncompressedSize(rawIO.readLongLittleEndian(extraData, counter));
+      counter += 8;
+    }
+
+    if (counter < extraDataRecord.getSizeOfData() && compressedSize == ZIP_64_SIZE_LIMIT) {
+      zip64ExtendedInfo.setCompressedSize(rawIO.readLongLittleEndian(extraData, counter));
+      counter += 8;
+    }
+
+    if (counter < extraDataRecord.getSizeOfData() && offsetLocalHeader == ZIP_64_SIZE_LIMIT) {
+      zip64ExtendedInfo.setOffsetLocalHeader(rawIO.readLongLittleEndian(extraData, counter));
+      counter += 8;
+    }
+
+    if (counter < extraDataRecord.getSizeOfData() && diskNumberStart == ZIP_64_NUMBER_OF_ENTRIES_LIMIT) {
+      zip64ExtendedInfo.setDiskNumberStart(rawIO.readIntLittleEndian(extraData, counter));
+    }
+
+    return zip64ExtendedInfo;
   }
 
   private void setFilePointerToReadZip64EndCentralDirLoc(RandomAccessFile zip4jRaf, RawIO rawIO) throws IOException {
@@ -690,30 +695,33 @@ public class HeaderReader {
       }
 
       if (extraDataRecord.getHeader() == HeaderSignature.AES_EXTRA_DATA_RECORD.getValue()) {
-
-        if (extraDataRecord.getData() == null) {
-          throw new ZipException("corrupt AES extra data records");
-        }
-
-        AESExtraDataRecord aesExtraDataRecord = new AESExtraDataRecord();
-
-        aesExtraDataRecord.setSignature(HeaderSignature.AES_EXTRA_DATA_RECORD);
-        aesExtraDataRecord.setDataSize(extraDataRecord.getSizeOfData());
-
-        byte[] aesData = extraDataRecord.getData();
-        aesExtraDataRecord.setAesVersion(AesVersion.getFromVersionNumber(rawIO.readShortLittleEndian(aesData, 0)));
-        byte[] vendorIDBytes = new byte[2];
-        System.arraycopy(aesData, 2, vendorIDBytes, 0, 2);
-        aesExtraDataRecord.setVendorID(new String(vendorIDBytes));
-        aesExtraDataRecord.setAesKeyStrength(AesKeyStrength.getAesKeyStrengthFromRawCode(aesData[4] & 0xFF));
-        aesExtraDataRecord.setCompressionMethod(
-            CompressionMethod.getCompressionMethodFromCode(rawIO.readShortLittleEndian(aesData, 5)));
-
-        return aesExtraDataRecord;
+        return readAesExtraDataRecord(extraDataRecord, rawIO);
       }
     }
 
     return null;
+  }
+
+  private AESExtraDataRecord readAesExtraDataRecord(ExtraDataRecord extraDataRecord, RawIO rawIO) throws ZipException {
+    if (extraDataRecord.getData() == null) {
+      throw new ZipException("corrupt AES extra data records");
+    }
+
+    AESExtraDataRecord aesExtraDataRecord = new AESExtraDataRecord();
+
+    aesExtraDataRecord.setSignature(HeaderSignature.AES_EXTRA_DATA_RECORD);
+    aesExtraDataRecord.setDataSize(extraDataRecord.getSizeOfData());
+
+    byte[] aesData = extraDataRecord.getData();
+    aesExtraDataRecord.setAesVersion(AesVersion.getFromVersionNumber(rawIO.readShortLittleEndian(aesData, 0)));
+    byte[] vendorIDBytes = new byte[2];
+    System.arraycopy(aesData, 2, vendorIDBytes, 0, 2);
+    aesExtraDataRecord.setVendorID(new String(vendorIDBytes));
+    aesExtraDataRecord.setAesKeyStrength(AesKeyStrength.getAesKeyStrengthFromRawCode(aesData[4] & 0xFF));
+    aesExtraDataRecord.setCompressionMethod(
+        CompressionMethod.getCompressionMethodFromCode(rawIO.readShortLittleEndian(aesData, 5)));
+
+    return aesExtraDataRecord;
   }
 
   private long getOffsetCentralDirectory(ZipModel zipModel) {
